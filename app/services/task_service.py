@@ -8,6 +8,7 @@ from app.utils.pagination import paginate
 
 
 def create_task(db: Session, project_id: int, data: TaskCreate) -> Task:
+    """Create a task in the given project."""
     task = Task(
         title=data.title,
         description=data.description,
@@ -25,6 +26,7 @@ def create_task(db: Session, project_id: int, data: TaskCreate) -> Task:
 def get_tasks_for_project(
     db: Session, project_id: int, limit: int = None, offset: int = None
 ) -> List[Task]:
+    """List a project's tasks in creation order, with limit/offset paging."""
     query = (
         db.query(Task)
         .filter(Task.project_id == project_id)
@@ -34,6 +36,7 @@ def get_tasks_for_project(
 
 
 def get_task(db: Session, project_id: int, task_id: int) -> Optional[Task]:
+    """Fetch a task by id, scoped to its project. None if missing."""
     return (
         db.query(Task)
         .filter(Task.id == task_id, Task.project_id == project_id)
@@ -42,6 +45,7 @@ def get_task(db: Session, project_id: int, task_id: int) -> Optional[Task]:
 
 
 def update_task(db: Session, task: Task, data: TaskUpdate) -> Task:
+    """Apply the fields present in the update payload to a task."""
     updates = data.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(task, field, value)
@@ -51,5 +55,6 @@ def update_task(db: Session, task: Task, data: TaskUpdate) -> Task:
 
 
 def delete_task(db: Session, task: Task) -> None:
+    """Delete a task."""
     db.delete(task)
     db.commit()

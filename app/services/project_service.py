@@ -7,6 +7,7 @@ from app.schemas.project import ProjectCreate, ProjectUpdate
 
 
 def create_project(db: Session, owner_id: int, data: ProjectCreate) -> Project:
+    """Create a project owned by the given user."""
     project = Project(
         name=data.name,
         description=data.description,
@@ -19,6 +20,7 @@ def create_project(db: Session, owner_id: int, data: ProjectCreate) -> Project:
 
 
 def get_projects_for_user(db: Session, owner_id: int) -> List[Project]:
+    """List all projects owned by a user, oldest first."""
     return (
         db.query(Project)
         .filter(Project.owner_id == owner_id)
@@ -28,6 +30,7 @@ def get_projects_for_user(db: Session, owner_id: int) -> List[Project]:
 
 
 def get_project(db: Session, owner_id: int, project_id: int) -> Optional[Project]:
+    """Fetch a project by id, scoped to its owner. None if missing."""
     return (
         db.query(Project)
         .filter(Project.id == project_id, Project.owner_id == owner_id)
@@ -36,6 +39,7 @@ def get_project(db: Session, owner_id: int, project_id: int) -> Optional[Project
 
 
 def update_project(db: Session, project: Project, data: ProjectUpdate) -> Project:
+    """Apply the fields present in the update payload to a project."""
     updates = data.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(project, field, value)
@@ -45,5 +49,6 @@ def update_project(db: Session, project: Project, data: ProjectUpdate) -> Projec
 
 
 def delete_project(db: Session, project: Project) -> None:
+    """Delete a project."""
     db.delete(project)
     db.commit()
