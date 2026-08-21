@@ -1,3 +1,5 @@
+import time
+
 from tests.conftest import USER_EMAIL, USER_PASSWORD, register_and_login
 
 
@@ -119,3 +121,135 @@ def test_token_from_login_works_on_protected_route(client):
     )
     assert response.status_code == 200
     assert response.json()["email"] == "bob@example.com"
+
+
+# ---------------------------------------------------------------------------
+# Rate-limiting tests
+# ---------------------------------------------------------------------------
+
+
+def _make_failed_attempts(client, email: str, n: int) -> None:
+    """POST n failed login attempts for *email* using a wrong password."""
+    for _ in range(n):
+        resp = client.post(
+            "/auth/login",
+            json={"email": email, "password": "definitely-wrong-password"},
+        )
+        # Each attempt before the limit is hit must be 401
+        assert resp.status_code == 401
+
+
+def test_rate_limit_triggers_after_5_failures(client):
+    """The 6th consecutive failure for the same email must return 429."""
+    email = "victim@example.com"
+    client.post("/auth/register", json={"email": email, "password": "password123"})
+
+    _make_failed_attempts(client, email, 5)
+
+    response = client.post(
+        "/auth/login",
+        json={"email": email, "password": "wrong-again"},
+    )
+    assert response.status_code == 429
+    assert "Retry-After" in response.headers
+    assert int(response.headers["Retry-After"]) > 0
+
+
+def test_rate_limit_response_body(client):
+    """The 429 response body must contain a descriptive detail message."""
+    email = "victim2@example.com"
+    client.post("/auth/register", json={"email": email, "password": "password123"})
+
+    _make_failed_attempts(client, email, 5)
+
+    response = client.post(
+        "/auth/login",
+        json={"email": email, "password": "wrong-again"},
+    )
+    assert response.status_code == 429
+    assert "Too many" in response.json()["detail"]
+
+
+def test_rate_limit_applies_to_unknown_email(client):
+    """Rate limiting must apply even when the email is not registered.
+
+    This ensures the limiter does not leak whether an account exists.
+    """
+    email = "ghost@example.com"  # never registered
+
+    _make_failed_attempts(client, email, 5)
+
+    response = client.post(
+        "/auth/login",
+        json={"email": email, "password": "wrong-again"},
+    )
+    assert response.status_code == 429
+    assert "Retry-After" in response.headers
+
+
+def test_rate_limit_reset_on_success(client):
+    """A successful login resets the failure counter.
+
+    After a successful login, 5 more failed attempts should all return 401,
+    not 429 — the window was reset.
+    """
+    email = "resetter@example.com"
+    password = "password123"
+    client.post("/auth/register", json={"email": email, "password": password})
+
+    # 4 failures — not yet blocked
+    for _ in range(4):
+        resp = client.post(
+            "/auth/login",
+            json={"email": email, "password": "wrong"},
+        )
+        assert resp.status_code == 401
+
+    # Successful login — resets the counter
+    ok = client.post("/auth/login", json={"email": email, "password": password})
+    assert ok.status_code == 200
+
+    # 5 more failures — counter was reset so all should be 401, not 429
+    for _ in range(5):
+        resp = client.post(
+            "/auth/login",
+            json={"email": email, "password": "wrong"},
+        )
+        assert resp.status_code == 401
+
+
+def test_rate_limit_correct_credentials_not_blocked_by_prior_failures(client):
+    """Correct credentials succeed even after 4 prior failures (not yet blocked)."""
+    email = "almost@example.com"
+    password = "password123"
+    client.post("/auth/register", json={"email": email, "password": password})
+
+    # 4 failures (one below the threshold)
+    for _ in range(4):
+        resp = client.post(
+            "/auth/login",
+            json={"email": email, "password": "wrong"},
+        )
+        assert resp.status_code == 401
+
+    # Correct credentials on the 5th attempt — must still succeed
+    response = client.post("/auth/login", json={"email": email, "password": password})
+    assert response.status_code == 200
+    assert "access_token" in response.json()
+
+
+def test_rate_limit_retry_after_header_is_integer_string(client):
+    """The Retry-After header must be a parseable integer between 1 and 60."""
+    email = "header-check@example.com"
+    client.post("/auth/register", json={"email": email, "password": "password123"})
+
+    _make_failed_attempts(client, email, 5)
+
+    response = client.post(
+        "/auth/login",
+        json={"email": email, "password": "wrong-again"},
+    )
+    assert response.status_code == 429
+    retry_after_str = response.headers["Retry-After"]
+    retry_after = int(retry_after_str)  # must not raise
+    assert 1 <= retry_after <= 61  # window is 60 s; +1 ceiling; allow small drift
