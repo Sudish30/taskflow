@@ -93,6 +93,38 @@ def test_login_unknown_email(client):
     assert response.status_code == 401
 
 
+def test_login_with_mixed_case_email_succeeds(client):
+    """Registering with mixed case then logging in with the same mixed case should succeed."""
+    client.post(
+        "/auth/register",
+        json={"email": "Alice@Example.com", "password": "password123"},
+    )
+    response = client.post(
+        "/auth/login",
+        json={"email": "Alice@Example.com", "password": "password123"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["token_type"] == "bearer"
+    assert len(body["access_token"]) > 20
+
+
+def test_login_with_different_case_than_registration(client):
+    """Logging in with a different case than used at registration should succeed."""
+    client.post(
+        "/auth/register",
+        json={"email": "alice@example.com", "password": "password123"},
+    )
+    response = client.post(
+        "/auth/login",
+        json={"email": "ALICE@EXAMPLE.COM", "password": "password123"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["token_type"] == "bearer"
+    assert len(body["access_token"]) > 20
+
+
 def test_me_returns_current_user(auth_client):
     response = auth_client.get("/auth/me")
     assert response.status_code == 200
