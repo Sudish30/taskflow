@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.user import Token, UserCreate, UserLogin, UserResponse
 from app.services import auth_service
+from app.utils.limiter_instance import login_rate_limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -45,12 +46,27 @@ def register(data: UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", response_model=Token)
 def login(data: UserLogin, db: Session = Depends(get_db)):
+    key = data.email.lower().strip()
+
+    # Check rate limit BEFORE attempting authentication so that the limiter
+    # applies equally to known and unknown email addresses (no account leak).
+    blocked, retry_after = login_rate_limiter.is_blocked(key)
+    if blocked:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed login attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     user = auth_service.authenticate_user(db, data.email, data.password)
     if user is None:
+        login_rate_limiter.record_failure(key)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password",
         )
+
+    login_rate_limiter.record_success(key)
     token = auth_service.create_access_token(user.id)
     return Token(access_token=token)
 
