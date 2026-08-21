@@ -28,3 +28,11 @@ def validate_priority(value: int) -> int:
             f"Priority must be between {MIN_PRIORITY} and {MAX_PRIORITY}"
         )
     return value
+
+
+def validate_not_blank(value: str, field_name: str = "Value") -> str:
+    """Strip whitespace and reject strings that are empty after stripping."""
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError(f"{field_name} must not be blank")
+    return stripped
