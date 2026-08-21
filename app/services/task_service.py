@@ -1,10 +1,10 @@
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskUpdate
-from app.utils.pagination import paginate
+from app.utils.pagination import paginate, paginate_with_count
 
 
 def create_task(db: Session, project_id: int, data: TaskCreate) -> Task:
@@ -25,14 +25,18 @@ def create_task(db: Session, project_id: int, data: TaskCreate) -> Task:
 
 def get_tasks_for_project(
     db: Session, project_id: int, limit: int = None, offset: int = None
-) -> List[Task]:
-    """List a project's tasks in creation order, with limit/offset paging."""
+) -> Dict:
+    """List a project's tasks in creation order, with limit/offset paging.
+
+    Returns a dict with keys: items, total, limit, offset.
+    """
     query = (
         db.query(Task)
         .filter(Task.project_id == project_id)
         .order_by(Task.id)
     )
-    return paginate(query, limit=limit, offset=offset)
+    items, total, limit, offset = paginate_with_count(query, limit=limit, offset=offset)
+    return {"items": items, "total": total, "limit": limit, "offset": offset}
 
 
 def get_task(db: Session, project_id: int, task_id: int) -> Optional[Task]:
