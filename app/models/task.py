@@ -22,7 +22,7 @@ class Task(Base):
     status = Column(Enum(TaskStatus), default=TaskStatus.todo, nullable=False)
     priority = Column(Integer, default=3, nullable=False)
     due_date = Column(DateTime, nullable=True)
-    project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
+    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     project = relationship("Project", back_populates="tasks")
