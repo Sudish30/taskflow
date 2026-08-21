@@ -119,3 +119,38 @@ def test_token_from_login_works_on_protected_route(client):
     )
     assert response.status_code == 200
     assert response.json()["email"] == "bob@example.com"
+
+
+def test_login_with_mixed_case_email_succeeds(client):
+    """Registering with mixed-case email and logging in with the same casing should succeed."""
+    # Registration normalizes the email to lowercase
+    client.post(
+        "/auth/register",
+        json={"email": "Alice@Example.com", "password": "password123"},
+    )
+    # Login with the same mixed-case email should succeed
+    response = client.post(
+        "/auth/login",
+        json={"email": "Alice@Example.com", "password": "password123"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["token_type"] == "bearer"
+    assert len(body["access_token"]) > 20
+
+
+def test_login_normalizes_email_case(client):
+    """Login should succeed regardless of the email casing supplied by the user."""
+    # Register with lowercase email
+    client.post(
+        "/auth/register",
+        json={"email": "bob@example.com", "password": "password123"},
+    )
+    # Login with uppercase version should also succeed
+    response = client.post(
+        "/auth/login",
+        json={"email": "BOB@EXAMPLE.COM", "password": "password123"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert "access_token" in body
