@@ -1,8 +1,12 @@
+from datetime import datetime
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.project import Project
+from app.models.task import TaskStatus
 from app.models.user import User
 from app.routes.auth import get_current_user
 from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
@@ -36,11 +40,22 @@ def list_tasks(
     project_id: int,
     limit: int = Query(default=20, ge=1),
     offset: int = Query(default=0, ge=0),
+    status: Optional[TaskStatus] = Query(default=None),
+    due_before: Optional[datetime] = Query(default=None),
+    due_after: Optional[datetime] = Query(default=None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     get_owned_project(project_id, db, current_user)
-    return task_service.get_tasks_for_project(db, project_id, limit=limit, offset=offset)
+    return task_service.get_tasks_for_project(
+        db,
+        project_id,
+        limit=limit,
+        offset=offset,
+        status=status,
+        due_before=due_before,
+        due_after=due_after,
+    )
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
