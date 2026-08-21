@@ -14,6 +14,7 @@ class Project(Base):
     description = Column(Text, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    deleted_at = Column(DateTime, nullable=True, default=None)
 
     owner = relationship("User", back_populates="projects")
     tasks = relationship("Task", back_populates="project")
