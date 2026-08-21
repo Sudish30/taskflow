@@ -119,3 +119,60 @@ def test_token_from_login_works_on_protected_route(client):
     )
     assert response.status_code == 200
     assert response.json()["email"] == "bob@example.com"
+
+
+def test_register_no_digit_password(client):
+    """Password with only letters should be rejected."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "nodigit@example.com", "password": "aaaaaaaa"},
+    )
+    assert response.status_code == 422
+    body = response.json()
+    detail_str = str(body["detail"])
+    assert "letter" in detail_str and "digit" in detail_str
+
+
+def test_register_no_letter_password(client):
+    """Password with only digits should be rejected."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "noletter@example.com", "password": "12345678"},
+    )
+    assert response.status_code == 422
+    body = response.json()
+    detail_str = str(body["detail"])
+    assert "letter" in detail_str and "digit" in detail_str
+
+
+def test_register_too_long_password(client):
+    """Password exceeding 72 characters should be rejected."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "toolong@example.com", "password": "a1" + "x" * 71},
+    )
+    assert response.status_code == 422
+    body = response.json()
+    detail_str = str(body["detail"])
+    assert "72" in detail_str
+
+
+def test_register_exactly_72_char_password(client):
+    """Password of exactly 72 characters should be accepted."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "exact72@example.com", "password": "a1" + "x" * 70},
+    )
+    assert response.status_code == 201
+
+
+def test_register_short_password_error_message(client):
+    """422 detail should mention the failed requirement."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "short2@example.com", "password": "a1"},
+    )
+    assert response.status_code == 422
+    body = response.json()
+    detail_str = str(body["detail"])
+    assert "8" in detail_str
