@@ -55,7 +55,7 @@ def test_create_task_project_not_found(auth_client):
         "/projects/9999/tasks", json={"title": "Orphan"}
     )
     assert response.status_code == 404
-    assert response.json()["detail"] == "Project not found"
+    assert response.json()["error"]["message"] == "Project not found"
 
 
 def test_create_task_requires_auth(client):
@@ -125,7 +125,7 @@ def test_get_task(auth_client, project):
 def test_get_task_not_found(auth_client, project):
     response = auth_client.get(f"/projects/{project['id']}/tasks/9999")
     assert response.status_code == 404
-    assert response.json()["detail"] == "Task not found"
+    assert response.json()["error"]["message"] == "Task not found"
 
 
 def test_get_task_under_wrong_project(auth_client, project):
@@ -173,6 +173,7 @@ def test_update_task_not_found(auth_client, project):
         f"/projects/{project['id']}/tasks/9999", json={"title": "Ghost"}
     )
     assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
 
 
 def test_delete_task(auth_client, project):
@@ -190,3 +191,4 @@ def test_delete_task(auth_client, project):
 def test_delete_task_not_found(auth_client, project):
     response = auth_client.delete(f"/projects/{project['id']}/tasks/9999")
     assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
