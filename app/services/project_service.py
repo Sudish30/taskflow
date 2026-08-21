@@ -19,14 +19,20 @@ def create_project(db: Session, owner_id: int, data: ProjectCreate) -> Project:
     return project
 
 
-def get_projects_for_user(db: Session, owner_id: int) -> List[Project]:
-    """List all projects owned by a user, oldest first."""
-    return (
-        db.query(Project)
-        .filter(Project.owner_id == owner_id)
-        .order_by(Project.id)
-        .all()
-    )
+def get_projects_for_user(
+    db: Session, owner_id: int, include_archived: bool = False
+) -> List[Project]:
+    """List projects owned by a user, oldest first.
+
+    By default, archived projects are excluded.
+    Pass include_archived=True to return only archived projects.
+    """
+    query = db.query(Project).filter(Project.owner_id == owner_id)
+    if not include_archived:
+        query = query.filter(Project.is_archived == False)
+    else:
+        query = query.filter(Project.is_archived == True)
+    return query.order_by(Project.id).all()
 
 
 def get_project(db: Session, owner_id: int, project_id: int) -> Optional[Project]:
@@ -43,6 +49,14 @@ def update_project(db: Session, project: Project, data: ProjectUpdate) -> Projec
     updates = data.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(project, field, value)
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+def archive_project(db: Session, project: Project, is_archived: bool) -> Project:
+    """Set the archived state of a project."""
+    project.is_archived = is_archived
     db.commit()
     db.refresh(project)
     return project
