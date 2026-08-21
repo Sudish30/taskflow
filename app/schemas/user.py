@@ -24,6 +24,12 @@ class UserLogin(BaseModel):
     email: str
     password: str
 
+    @field_validator("email")
+    @classmethod
+    def normalise_email(cls, value: str) -> str:
+        """Strip whitespace and lowercase the email before lookup."""
+        return value.strip().lower()
+
 
 class UserResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
