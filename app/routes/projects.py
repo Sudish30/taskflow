@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -36,9 +35,9 @@ def get_project(
 ):
     project = project_service.get_project(db, current_user.id, project_id)
     if project is None:
-        return JSONResponse(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            content={"error": "Project not found"},
+            detail="Project not found",
         )
     return project
 
@@ -52,9 +51,9 @@ def update_project(
 ):
     project = project_service.get_project(db, current_user.id, project_id)
     if project is None:
-        return JSONResponse(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            content={"error": "Project not found"},
+            detail="Project not found",
         )
     return project_service.update_project(db, project, data)
 
@@ -67,8 +66,8 @@ def delete_project(
 ):
     project = project_service.get_project(db, current_user.id, project_id)
     if project is None:
-        return JSONResponse(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            content={"error": "Project not found"},
+            detail="Project not found",
         )
     project_service.delete_project(db, project)
