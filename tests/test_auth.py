@@ -29,7 +29,8 @@ def test_register_duplicate_email(client):
     assert first.status_code == 201
     second = client.post("/auth/register", json=payload)
     assert second.status_code == 400
-    assert second.json()["detail"] == "Email already registered"
+    assert second.json()["error"]["message"] == "Email already registered"
+    assert second.json()["error"]["code"] == "bad_request"
 
 
 def test_register_invalid_email(client):
@@ -82,7 +83,8 @@ def test_login_wrong_password(client):
         json={"email": USER_EMAIL, "password": "wrongpassword"},
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid email or password"
+    assert response.json()["error"]["message"] == "Invalid email or password"
+    assert response.json()["error"]["code"] == "unauthorized"
 
 
 def test_login_unknown_email(client):
@@ -109,7 +111,8 @@ def test_me_with_invalid_token(client):
         "/auth/me", headers={"Authorization": "Bearer not-a-real-token"}
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Could not validate credentials"
+    assert response.json()["error"]["message"] == "Could not validate credentials"
+    assert response.json()["error"]["code"] == "unauthorized"
 
 
 def test_token_from_login_works_on_protected_route(client):
@@ -119,3 +122,31 @@ def test_token_from_login_works_on_protected_route(client):
     )
     assert response.status_code == 200
     assert response.json()["email"] == "bob@example.com"
+
+
+def test_error_envelope_shape_on_bad_login(client):
+    """Verify the standard error envelope is present on auth errors."""
+    response = client.post(
+        "/auth/login",
+        json={"email": "ghost@example.com", "password": "password123"},
+    )
+    assert response.status_code == 401
+    body = response.json()
+    assert "error" in body
+    assert "code" in body["error"]
+    assert "message" in body["error"]
+    assert body["error"]["code"] == "unauthorized"
+
+
+def test_error_envelope_shape_on_validation_error(client):
+    """Verify the standard error envelope is present on validation errors."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "not-an-email", "password": "password123"},
+    )
+    assert response.status_code == 422
+    body = response.json()
+    assert "error" in body
+    assert body["error"]["code"] == "validation_error"
+    assert isinstance(body["error"]["message"], str)
+    assert len(body["error"]["message"]) > 0
