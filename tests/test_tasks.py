@@ -190,3 +190,138 @@ def test_delete_task(auth_client, project):
 def test_delete_task_not_found(auth_client, project):
     response = auth_client.delete(f"/projects/{project['id']}/tasks/9999")
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Filter by status
+# ---------------------------------------------------------------------------
+
+def test_filter_by_status_todo(auth_client, project):
+    create_task(auth_client, project["id"], title="Open", status="todo")
+    create_task(auth_client, project["id"], title="Done", status="done")
+    response = auth_client.get(f"/projects/{project['id']}/tasks?status=todo")
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert titles == ["Open"]
+    assert all(t["status"] == "todo" for t in response.json())
+
+
+def test_filter_by_status_done(auth_client, project):
+    create_task(auth_client, project["id"], title="Open", status="todo")
+    create_task(auth_client, project["id"], title="Done", status="done")
+    response = auth_client.get(f"/projects/{project['id']}/tasks?status=done")
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["title"] == "Done"
+
+
+def test_filter_by_status_invalid_returns_422(auth_client, project):
+    response = auth_client.get(f"/projects/{project['id']}/tasks?status=blocked")
+    assert response.status_code == 422
+
+
+# ---------------------------------------------------------------------------
+# Filter by due_before
+# ---------------------------------------------------------------------------
+
+def test_filter_due_before(auth_client, project):
+    create_task(auth_client, project["id"], title="Early", due_date="2025-01-01T00:00:00")
+    create_task(auth_client, project["id"], title="Late", due_date="2025-12-31T00:00:00")
+    create_task(auth_client, project["id"], title="No due")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?due_before=2025-06-01T00:00:00"
+    )
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert "Early" in titles
+    assert "Late" not in titles
+    assert "No due" not in titles  # tasks with no due_date are excluded
+
+
+# ---------------------------------------------------------------------------
+# Filter by due_after
+# ---------------------------------------------------------------------------
+
+def test_filter_due_after(auth_client, project):
+    create_task(auth_client, project["id"], title="Early", due_date="2025-01-01T00:00:00")
+    create_task(auth_client, project["id"], title="Late", due_date="2025-12-31T00:00:00")
+    create_task(auth_client, project["id"], title="No due")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?due_after=2025-06-01T00:00:00"
+    )
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert "Late" in titles
+    assert "Early" not in titles
+    assert "No due" not in titles  # tasks with no due_date are excluded
+
+
+# ---------------------------------------------------------------------------
+# Combined due_before + due_after (range)
+# ---------------------------------------------------------------------------
+
+def test_filter_due_before_and_due_after(auth_client, project):
+    create_task(auth_client, project["id"], title="Before range", due_date="2025-01-01T00:00:00")
+    create_task(auth_client, project["id"], title="In range", due_date="2025-06-15T00:00:00")
+    create_task(auth_client, project["id"], title="After range", due_date="2025-12-31T00:00:00")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?due_after=2025-03-01T00:00:00&due_before=2025-09-01T00:00:00"
+    )
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert titles == ["In range"]
+
+
+# ---------------------------------------------------------------------------
+# Combined status + due_before (AND composition)
+# ---------------------------------------------------------------------------
+
+def test_filter_status_and_due_before(auth_client, project):
+    create_task(auth_client, project["id"], title="Match", status="todo", due_date="2025-03-01T00:00:00")
+    create_task(auth_client, project["id"], title="Wrong status", status="done", due_date="2025-03-01T00:00:00")
+    create_task(auth_client, project["id"], title="Wrong date", status="todo", due_date="2025-12-31T00:00:00")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?status=todo&due_before=2025-06-01T00:00:00"
+    )
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert titles == ["Match"]
+
+
+# ---------------------------------------------------------------------------
+# Filters compose with pagination
+# ---------------------------------------------------------------------------
+
+def test_filter_composes_with_pagination(auth_client, project):
+    for i in range(4):
+        create_task(auth_client, project["id"], title=f"Todo {i}", status="todo")
+    create_task(auth_client, project["id"], title="Done task", status="done")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?status=todo&limit=2&offset=1"
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    assert all(t["status"] == "todo" for t in body)
+
+
+# ---------------------------------------------------------------------------
+# No due date exclusion when a date bound is used (explicit)
+# ---------------------------------------------------------------------------
+
+def test_no_due_date_excluded_with_due_before(auth_client, project):
+    create_task(auth_client, project["id"], title="No date")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?due_before=2099-01-01T00:00:00"
+    )
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_no_due_date_excluded_with_due_after(auth_client, project):
+    create_task(auth_client, project["id"], title="No date")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?due_after=2000-01-01T00:00:00"
+    )
+    assert response.status_code == 200
+    assert response.json() == []
