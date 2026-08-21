@@ -1,3 +1,6 @@
+from sqlalchemy.orm import sessionmaker
+
+from app.models.task import Task as TaskModel
 from tests.conftest import register_and_login
 
 
@@ -110,3 +113,53 @@ def test_delete_project(auth_client, project):
 def test_delete_project_not_found(auth_client):
     response = auth_client.delete("/projects/9999")
     assert response.status_code == 404
+
+
+def test_delete_project_cascades_to_tasks(auth_client, project):
+    """Deleting a project via the API should remove all its tasks."""
+    # Create two tasks under the project
+    auth_client.post(
+        f"/projects/{project['id']}/tasks", json={"title": "Task A"}
+    )
+    auth_client.post(
+        f"/projects/{project['id']}/tasks", json={"title": "Task B"}
+    )
+    # Verify tasks exist before deletion
+    tasks_before = auth_client.get(f"/projects/{project['id']}/tasks")
+    assert tasks_before.status_code == 200
+    assert len(tasks_before.json()) == 2
+
+    # Delete the project
+    delete_response = auth_client.delete(f"/projects/{project['id']}")
+    assert delete_response.status_code == 204
+
+    # Verify the project is gone
+    get_response = auth_client.get(f"/projects/{project['id']}")
+    assert get_response.status_code == 404
+
+
+def test_delete_project_removes_tasks_from_db(client, db_engine):
+    """Verify at the DB level that task rows are deleted when a project is deleted."""
+    token = register_and_login(client, "dbcheck@example.com", "password123")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    # Create project
+    proj = client.post("/projects", json={"name": "ToDelete"}, headers=headers).json()
+    project_id = proj["id"]
+
+    # Create tasks
+    client.post(f"/projects/{project_id}/tasks", json={"title": "T1"}, headers=headers)
+    client.post(f"/projects/{project_id}/tasks", json={"title": "T2"}, headers=headers)
+
+    # Delete project via API
+    resp = client.delete(f"/projects/{project_id}", headers=headers)
+    assert resp.status_code == 204
+
+    # Verify no task rows remain in the database
+    TestingSession = sessionmaker(bind=db_engine)
+    db = TestingSession()
+    try:
+        remaining = db.query(TaskModel).filter(TaskModel.project_id == project_id).all()
+        assert remaining == [], f"Expected no tasks, found {len(remaining)}"
+    finally:
+        db.close()
