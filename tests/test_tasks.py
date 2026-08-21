@@ -76,7 +76,11 @@ def test_create_task_on_other_users_project(auth_client, project):
 def test_list_tasks_empty(auth_client, project):
     response = auth_client.get(f"/projects/{project['id']}/tasks")
     assert response.status_code == 200
-    assert response.json() == []
+    body = response.json()
+    assert body["items"] == []
+    assert body["total"] == 0
+    assert body["limit"] == 20
+    assert body["offset"] == 0
 
 
 def test_list_tasks_returns_created(auth_client, project):
@@ -84,8 +88,10 @@ def test_list_tasks_returns_created(auth_client, project):
     create_task(auth_client, project["id"], title="Second")
     response = auth_client.get(f"/projects/{project['id']}/tasks")
     assert response.status_code == 200
-    titles = [t["title"] for t in response.json()]
+    body = response.json()
+    titles = [t["title"] for t in body["items"]]
     assert titles == ["First", "Second"]
+    assert body["total"] == 2
 
 
 def test_list_tasks_limit(auth_client, project):
@@ -93,8 +99,11 @@ def test_list_tasks_limit(auth_client, project):
         create_task(auth_client, project["id"], title=f"Task {i}")
     response = auth_client.get(f"/projects/{project['id']}/tasks?limit=2")
     assert response.status_code == 200
-    titles = [t["title"] for t in response.json()]
+    body = response.json()
+    titles = [t["title"] for t in body["items"]]
     assert titles == ["Task 0", "Task 1"]
+    assert body["total"] == 5  # total ignores pagination
+    assert body["limit"] == 2
 
 
 def test_list_tasks_offset(auth_client, project):
@@ -104,13 +113,27 @@ def test_list_tasks_offset(auth_client, project):
         f"/projects/{project['id']}/tasks?limit=2&offset=3"
     )
     assert response.status_code == 200
-    titles = [t["title"] for t in response.json()]
+    body = response.json()
+    titles = [t["title"] for t in body["items"]]
     assert titles == ["Task 3", "Task 4"]
+    assert body["total"] == 5
+    assert body["offset"] == 3
 
 
 def test_list_tasks_rejects_zero_limit(auth_client, project):
     response = auth_client.get(f"/projects/{project['id']}/tasks?limit=0")
     assert response.status_code == 422
+
+
+def test_list_tasks_envelope_shape(auth_client, project):
+    """Verify that the response always contains the envelope fields."""
+    response = auth_client.get(f"/projects/{project['id']}/tasks")
+    assert response.status_code == 200
+    body = response.json()
+    assert "items" in body
+    assert "total" in body
+    assert "limit" in body
+    assert "offset" in body
 
 
 def test_get_task(auth_client, project):
