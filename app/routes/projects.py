@@ -72,3 +72,18 @@ def delete_project(
             content={"error": "Project not found"},
         )
     project_service.delete_project(db, project)
+
+
+@router.post("/{project_id}/restore", response_model=ProjectResponse)
+def restore_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = project_service.get_deleted_project(db, current_user.id, project_id)
+    if project is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Project not found"},
+        )
+    return project_service.restore_project(db, project)

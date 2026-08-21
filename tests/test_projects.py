@@ -110,3 +110,63 @@ def test_delete_project(auth_client, project):
 def test_delete_project_not_found(auth_client):
     response = auth_client.delete("/projects/9999")
     assert response.status_code == 404
+
+
+# --- Soft delete / restore tests ---
+
+def test_delete_already_deleted_project_returns_404(auth_client, project):
+    auth_client.delete(f"/projects/{project['id']}")
+    response = auth_client.delete(f"/projects/{project['id']}")
+    assert response.status_code == 404
+
+
+def test_soft_deleted_project_excluded_from_list(auth_client, project):
+    auth_client.delete(f"/projects/{project['id']}")
+    response = auth_client.get("/projects")
+    assert response.status_code == 200
+    assert all(p["id"] != project["id"] for p in response.json())
+
+
+def test_restore_soft_deleted_project(auth_client, project):
+    auth_client.delete(f"/projects/{project['id']}")
+    response = auth_client.post(f"/projects/{project['id']}/restore")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == project["id"]
+    assert body["name"] == project["name"]
+    # Confirm project is accessible again
+    get_response = auth_client.get(f"/projects/{project['id']}")
+    assert get_response.status_code == 200
+
+
+def test_restore_active_project_returns_404(auth_client, project):
+    response = auth_client.post(f"/projects/{project['id']}/restore")
+    assert response.status_code == 404
+
+
+def test_restore_nonexistent_project_returns_404(auth_client):
+    response = auth_client.post("/projects/9999/restore")
+    assert response.status_code == 404
+
+
+def test_restore_other_users_project_returns_404(auth_client, project):
+    auth_client.delete(f"/projects/{project['id']}")
+    headers = second_user_headers(auth_client)
+    response = auth_client.post(f"/projects/{project['id']}/restore", headers=headers)
+    assert response.status_code == 404
+
+
+def test_tasks_inaccessible_when_project_soft_deleted(auth_client, project):
+    auth_client.post(f"/projects/{project['id']}/tasks", json={"title": "Task 1"})
+    auth_client.delete(f"/projects/{project['id']}")
+    response = auth_client.get(f"/projects/{project['id']}/tasks")
+    assert response.status_code == 404
+
+
+def test_tasks_accessible_after_restore(auth_client, project):
+    auth_client.post(f"/projects/{project['id']}/tasks", json={"title": "Task 1"})
+    auth_client.delete(f"/projects/{project['id']}")
+    auth_client.post(f"/projects/{project['id']}/restore")
+    response = auth_client.get(f"/projects/{project['id']}/tasks")
+    assert response.status_code == 200
+    assert len(response.json()) == 1

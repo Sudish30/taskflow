@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
@@ -20,20 +21,37 @@ def create_project(db: Session, owner_id: int, data: ProjectCreate) -> Project:
 
 
 def get_projects_for_user(db: Session, owner_id: int) -> List[Project]:
-    """List all projects owned by a user, oldest first."""
+    """List all non-deleted projects owned by a user, oldest first."""
     return (
         db.query(Project)
-        .filter(Project.owner_id == owner_id)
+        .filter(Project.owner_id == owner_id, Project.deleted_at == None)
         .order_by(Project.id)
         .all()
     )
 
 
 def get_project(db: Session, owner_id: int, project_id: int) -> Optional[Project]:
-    """Fetch a project by id, scoped to its owner. None if missing."""
+    """Fetch a non-deleted project by id, scoped to its owner. None if missing or soft-deleted."""
     return (
         db.query(Project)
-        .filter(Project.id == project_id, Project.owner_id == owner_id)
+        .filter(
+            Project.id == project_id,
+            Project.owner_id == owner_id,
+            Project.deleted_at == None,
+        )
+        .first()
+    )
+
+
+def get_deleted_project(db: Session, owner_id: int, project_id: int) -> Optional[Project]:
+    """Fetch a soft-deleted project by id, scoped to its owner. None if not soft-deleted or missing."""
+    return (
+        db.query(Project)
+        .filter(
+            Project.id == project_id,
+            Project.owner_id == owner_id,
+            Project.deleted_at != None,
+        )
         .first()
     )
 
@@ -49,6 +67,14 @@ def update_project(db: Session, project: Project, data: ProjectUpdate) -> Projec
 
 
 def delete_project(db: Session, project: Project) -> None:
-    """Delete a project."""
-    db.delete(project)
+    """Soft-delete a project by setting deleted_at timestamp."""
+    project.deleted_at = datetime.utcnow()
     db.commit()
+
+
+def restore_project(db: Session, project: Project) -> Project:
+    """Restore a soft-deleted project by clearing deleted_at."""
+    project.deleted_at = None
+    db.commit()
+    db.refresh(project)
+    return project
