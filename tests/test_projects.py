@@ -16,6 +16,7 @@ def test_create_project(auth_client):
     assert body["description"] == "Marketing site"
     assert "id" in body
     assert "created_at" in body
+    assert "updated_at" in body
 
 
 def test_create_project_requires_auth(client):
@@ -60,6 +61,7 @@ def test_get_project(auth_client, project):
     response = auth_client.get(f"/projects/{project['id']}")
     assert response.status_code == 200
     assert response.json()["name"] == "Inbox"
+    assert "updated_at" in response.json()
 
 
 def test_get_project_not_found(auth_client):
@@ -82,6 +84,7 @@ def test_update_project_name(auth_client, project):
     body = response.json()
     assert body["name"] == "Renamed"
     assert body["description"] == "Default project"
+    assert "updated_at" in body
 
 
 def test_update_project_description_only(auth_client, project):
@@ -92,12 +95,28 @@ def test_update_project_description_only(auth_client, project):
     body = response.json()
     assert body["name"] == "Inbox"
     assert body["description"] == "New description"
+    assert "updated_at" in body
 
 
 def test_update_project_not_found(auth_client):
     response = auth_client.put("/projects/9999", json={"name": "Nope"})
     assert response.status_code == 404
     assert response.json() == {"error": "Project not found"}
+
+
+def test_update_project_refreshes_updated_at(auth_client, project):
+    """updated_at in the update response should be >= the created_at value."""
+    import time
+
+    original_updated_at = project["updated_at"]
+    time.sleep(0.05)  # small sleep to ensure timestamp advances
+    response = auth_client.put(
+        f"/projects/{project['id']}", json={"name": "Refreshed"}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert "updated_at" in body
+    assert body["updated_at"] >= original_updated_at
 
 
 def test_delete_project(auth_client, project):
