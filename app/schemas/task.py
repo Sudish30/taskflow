@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -46,3 +46,12 @@ class TaskResponse(BaseModel):
     due_date: Optional[datetime]
     project_id: int
     created_at: datetime
+
+
+class TaskListResponse(BaseModel):
+    """Envelope response for paginated task lists."""
+
+    items: List[TaskResponse]
+    total: int
+    limit: int
+    offset: int
