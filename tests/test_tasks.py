@@ -50,6 +50,17 @@ def test_create_task_empty_title(auth_client, project):
     assert response.status_code == 422
 
 
+def test_create_task_whitespace_title(auth_client, project):
+    response = create_task(auth_client, project["id"], title="   ")
+    assert response.status_code == 422
+
+
+def test_create_task_title_is_trimmed(auth_client, project):
+    response = create_task(auth_client, project["id"], title="  My Task  ")
+    assert response.status_code == 201
+    assert response.json()["title"] == "My Task"
+
+
 def test_create_task_project_not_found(auth_client):
     response = auth_client.post(
         "/projects/9999/tasks", json={"title": "Orphan"}
@@ -173,6 +184,25 @@ def test_update_task_not_found(auth_client, project):
         f"/projects/{project['id']}/tasks/9999", json={"title": "Ghost"}
     )
     assert response.status_code == 404
+
+
+def test_update_task_whitespace_title(auth_client, project):
+    created = create_task(auth_client, project["id"]).json()
+    response = auth_client.put(
+        f"/projects/{project['id']}/tasks/{created['id']}",
+        json={"title": "   "},
+    )
+    assert response.status_code == 422
+
+
+def test_update_task_title_is_trimmed(auth_client, project):
+    created = create_task(auth_client, project["id"]).json()
+    response = auth_client.put(
+        f"/projects/{project['id']}/tasks/{created['id']}",
+        json={"title": "  Updated  "},
+    )
+    assert response.status_code == 200
+    assert response.json()["title"] == "Updated"
 
 
 def test_delete_task(auth_client, project):
