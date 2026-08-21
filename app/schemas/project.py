@@ -14,6 +14,10 @@ class ProjectUpdate(BaseModel):
     description: Optional[str] = None
 
 
+class ProjectArchive(BaseModel):
+    is_archived: bool
+
+
 class ProjectResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -22,3 +26,4 @@ class ProjectResponse(BaseModel):
     description: Optional[str]
     owner_id: int
     created_at: datetime
+    is_archived: bool
