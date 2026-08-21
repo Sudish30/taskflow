@@ -190,3 +190,80 @@ def test_delete_task(auth_client, project):
 def test_delete_task_not_found(auth_client, project):
     response = auth_client.delete(f"/projects/{project['id']}/tasks/9999")
     assert response.status_code == 404
+
+
+# ── Sorting tests ────────────────────────────────────────────────────────────
+
+def test_list_tasks_sort_by_priority_asc(auth_client, project):
+    create_task(auth_client, project["id"], title="High", priority=5)
+    create_task(auth_client, project["id"], title="Low", priority=1)
+    create_task(auth_client, project["id"], title="Mid", priority=3)
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=priority&order=asc"
+    )
+    assert response.status_code == 200
+    priorities = [t["priority"] for t in response.json()]
+    assert priorities == sorted(priorities)
+
+
+def test_list_tasks_sort_by_priority_desc(auth_client, project):
+    create_task(auth_client, project["id"], title="High", priority=5)
+    create_task(auth_client, project["id"], title="Low", priority=1)
+    create_task(auth_client, project["id"], title="Mid", priority=3)
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=priority&order=desc"
+    )
+    assert response.status_code == 200
+    priorities = [t["priority"] for t in response.json()]
+    assert priorities == sorted(priorities, reverse=True)
+
+
+def test_list_tasks_sort_by_created_at_desc(auth_client, project):
+    create_task(auth_client, project["id"], title="First")
+    create_task(auth_client, project["id"], title="Second")
+    create_task(auth_client, project["id"], title="Third")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=created_at&order=desc"
+    )
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert titles == ["Third", "Second", "First"]
+
+
+def test_list_tasks_sort_by_due_date_asc(auth_client, project):
+    create_task(auth_client, project["id"], title="Later", due_date="2027-06-01T00:00:00")
+    create_task(auth_client, project["id"], title="Earlier", due_date="2026-01-01T00:00:00")
+    create_task(auth_client, project["id"], title="Middle", due_date="2026-06-01T00:00:00")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=due_date&order=asc"
+    )
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert titles == ["Earlier", "Middle", "Later"]
+
+
+def test_list_tasks_invalid_sort_by(auth_client, project):
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=title"
+    )
+    assert response.status_code == 422
+
+
+def test_list_tasks_invalid_order(auth_client, project):
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?order=random"
+    )
+    assert response.status_code == 422
+
+
+def test_list_tasks_sort_composes_with_pagination(auth_client, project):
+    # Create tasks with priorities 5, 4, 3, 2, 1
+    for p in [5, 4, 3, 2, 1]:
+        create_task(auth_client, project["id"], title=f"Task p{p}", priority=p)
+    # Sorted asc: [1, 2, 3, 4, 5], offset=1, limit=2 → [2, 3]
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=priority&order=asc&limit=2&offset=1"
+    )
+    assert response.status_code == 200
+    priorities = [t["priority"] for t in response.json()]
+    assert priorities == [2, 3]
