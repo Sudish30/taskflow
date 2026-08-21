@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.config import get_settings
 from app.database import Base, engine
+from app.middleware import RequestLoggingMiddleware
 from app.routes import auth, projects, tasks
 
 
@@ -18,6 +19,10 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.app_name, lifespan=lifespan)
+
+    # Register middleware before routes
+    if settings.request_log_enabled:
+        app.add_middleware(RequestLoggingMiddleware)
 
     app.include_router(auth.router)
     app.include_router(projects.router)
