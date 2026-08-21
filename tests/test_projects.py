@@ -33,6 +33,17 @@ def test_create_project_empty_name(auth_client):
     assert response.status_code == 422
 
 
+def test_create_project_whitespace_name(auth_client):
+    response = auth_client.post("/projects", json={"name": "   "})
+    assert response.status_code == 422
+
+
+def test_create_project_name_is_trimmed(auth_client):
+    response = auth_client.post("/projects", json={"name": "  MyProject  "})
+    assert response.status_code == 201
+    assert response.json()["name"] == "MyProject"
+
+
 def test_list_projects_empty(auth_client):
     response = auth_client.get("/projects")
     assert response.status_code == 200
@@ -98,6 +109,21 @@ def test_update_project_not_found(auth_client):
     response = auth_client.put("/projects/9999", json={"name": "Nope"})
     assert response.status_code == 404
     assert response.json() == {"error": "Project not found"}
+
+
+def test_update_project_whitespace_name(auth_client, project):
+    response = auth_client.put(
+        f"/projects/{project['id']}", json={"name": "   "}
+    )
+    assert response.status_code == 422
+
+
+def test_update_project_name_is_trimmed(auth_client, project):
+    response = auth_client.put(
+        f"/projects/{project['id']}", json={"name": "  Trimmed  "}
+    )
+    assert response.status_code == 200
+    assert response.json()["name"] == "Trimmed"
 
 
 def test_delete_project(auth_client, project):
