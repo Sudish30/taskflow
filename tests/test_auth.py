@@ -119,3 +119,75 @@ def test_token_from_login_works_on_protected_route(client):
     )
     assert response.status_code == 200
     assert response.json()["email"] == "bob@example.com"
+
+
+# ---------------------------------------------------------------------------
+# New tests for strengthened password requirements (Issue #7)
+# ---------------------------------------------------------------------------
+
+def test_register_password_no_digit(client):
+    """A password with letters but no digit should be rejected with a
+    message mentioning 'digit'."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "nodigit@example.com", "password": "aaaaaaaa"},
+    )
+    assert response.status_code == 422
+    detail_str = str(response.json()["detail"])
+    assert "digit" in detail_str
+
+
+def test_register_password_no_letter(client):
+    """A password with digits but no letter should be rejected with a
+    message mentioning 'letter'."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "noletter@example.com", "password": "12345678"},
+    )
+    assert response.status_code == 422
+    detail_str = str(response.json()["detail"])
+    assert "letter" in detail_str
+
+
+def test_register_password_too_long(client):
+    """A password exceeding 72 characters should be rejected with a
+    message mentioning '72'."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "toolong@example.com", "password": "Aa1" + "x" * 70},
+    )
+    assert response.status_code == 422
+    detail_str = str(response.json()["detail"])
+    assert "72" in detail_str
+
+
+def test_register_password_exactly_max_length(client):
+    """A password of exactly 72 characters (the maximum) must be accepted."""
+    # "Aa1" (3 chars) + 69 "x"s = 72 chars total
+    response = client.post(
+        "/auth/register",
+        json={"email": "maxlen@example.com", "password": "Aa1" + "x" * 69},
+    )
+    assert response.status_code == 201
+
+
+def test_register_short_password_error_message(client):
+    """The too-short error message must mention the minimum length (8)."""
+    response = client.post(
+        "/auth/register",
+        json={"email": "short2@example.com", "password": "Ab1"},
+    )
+    assert response.status_code == 422
+    detail_str = str(response.json()["detail"])
+    assert "8" in detail_str
+
+
+def test_login_does_not_validate_password_strength(client):
+    """The login endpoint must not enforce password-complexity rules.
+    Submitting a weak password should yield 401 (bad credentials), not 422."""
+    response = client.post(
+        "/auth/login",
+        json={"email": "ghost@example.com", "password": "aaaaaaaa"},
+    )
+    # Authentication failure, not a validation error
+    assert response.status_code == 401
