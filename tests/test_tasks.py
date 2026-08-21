@@ -190,3 +190,72 @@ def test_delete_task(auth_client, project):
 def test_delete_task_not_found(auth_client, project):
     response = auth_client.delete(f"/projects/{project['id']}/tasks/9999")
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Cursor-based (keyset) pagination tests
+# ---------------------------------------------------------------------------
+
+def test_list_tasks_cursor_first_page(auth_client, project):
+    """First page with cursor=None behaves like offset=0."""
+    for i in range(5):
+        create_task(auth_client, project["id"], title=f"Task {i}")
+    response = auth_client.get(f"/projects/{project['id']}/tasks?limit=2")
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert titles == ["Task 0", "Task 1"]
+    # Response must carry the next-cursor header
+    assert "x-next-cursor" in response.headers
+
+
+def test_list_tasks_cursor_second_page(auth_client, project):
+    """Cursor from first page returns the correct next page."""
+    created_ids = []
+    for i in range(5):
+        t = create_task(auth_client, project["id"], title=f"Task {i}").json()
+        created_ids.append(t["id"])
+
+    # First page
+    r1 = auth_client.get(f"/projects/{project['id']}/tasks?limit=2")
+    assert r1.status_code == 200
+    next_cursor = r1.headers["x-next-cursor"]
+
+    # Second page using cursor
+    r2 = auth_client.get(
+        f"/projects/{project['id']}/tasks?limit=2&cursor={next_cursor}"
+    )
+    assert r2.status_code == 200
+    titles = [t["title"] for t in r2.json()]
+    assert titles == ["Task 2", "Task 3"]
+
+
+def test_list_tasks_cursor_last_page_no_more_results(auth_client, project):
+    """Cursor pointing past the last task returns an empty list."""
+    t = create_task(auth_client, project["id"], title="Only task").json()
+    # Use the only task's id as cursor — nothing after it
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?limit=10&cursor={t['id']}"
+    )
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_tasks_cursor_invalid(auth_client, project):
+    """cursor=0 is rejected (ge=1 constraint)."""
+    response = auth_client.get(f"/projects/{project['id']}/tasks?cursor=0")
+    assert response.status_code == 422
+
+
+def test_list_tasks_response_has_next_cursor_header(auth_client, project):
+    """X-Next-Cursor header is present when results are returned."""
+    create_task(auth_client, project["id"], title="Solo task")
+    response = auth_client.get(f"/projects/{project['id']}/tasks")
+    assert response.status_code == 200
+    assert "x-next-cursor" in response.headers
+
+
+def test_list_tasks_empty_has_no_next_cursor_header(auth_client, project):
+    """X-Next-Cursor header is absent when no tasks are returned."""
+    response = auth_client.get(f"/projects/{project['id']}/tasks")
+    assert response.status_code == 200
+    assert "x-next-cursor" not in response.headers
