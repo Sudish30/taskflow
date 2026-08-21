@@ -110,3 +110,81 @@ def test_delete_project(auth_client, project):
 def test_delete_project_not_found(auth_client):
     response = auth_client.delete("/projects/9999")
     assert response.status_code == 404
+
+
+# --- Soft-delete and restore tests ---
+
+
+def test_delete_project_is_soft_delete(auth_client, project):
+    """Deleting a project soft-deletes it: 404 on get and absent from listing."""
+    response = auth_client.delete(f"/projects/{project['id']}")
+    assert response.status_code == 204
+    # Confirm it's gone from normal get
+    assert auth_client.get(f"/projects/{project['id']}").status_code == 404
+    # Confirm it's gone from listing
+    listing = auth_client.get("/projects").json()
+    assert not any(p["id"] == project["id"] for p in listing)
+
+
+def test_delete_already_soft_deleted_returns_404(auth_client, project):
+    """Deleting a project that's already soft-deleted returns 404."""
+    auth_client.delete(f"/projects/{project['id']}")
+    response = auth_client.delete(f"/projects/{project['id']}")
+    assert response.status_code == 404
+
+
+def test_restore_project(auth_client, project):
+    """Deleting then restoring a project makes it accessible again."""
+    auth_client.delete(f"/projects/{project['id']}")
+    response = auth_client.post(f"/projects/{project['id']}/restore")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == project["id"]
+    assert body["name"] == "Inbox"
+    # Confirm accessible again
+    assert auth_client.get(f"/projects/{project['id']}").status_code == 200
+
+
+def test_restore_active_project_returns_404(auth_client, project):
+    """Restoring a project that is not soft-deleted returns 404."""
+    response = auth_client.post(f"/projects/{project['id']}/restore")
+    assert response.status_code == 404
+
+
+def test_restore_nonexistent_project_returns_404(auth_client):
+    """Restoring a project that doesn't exist returns 404."""
+    response = auth_client.post("/projects/9999/restore")
+    assert response.status_code == 404
+
+
+def test_restore_other_users_project_returns_404(auth_client, project):
+    """A user cannot restore another user's soft-deleted project."""
+    auth_client.delete(f"/projects/{project['id']}")
+    headers = second_user_headers(auth_client)
+    response = auth_client.post(f"/projects/{project['id']}/restore", headers=headers)
+    assert response.status_code == 404
+
+
+def test_soft_deleted_project_tasks_inaccessible(auth_client, project):
+    """Task endpoints return 404 for a soft-deleted project."""
+    # Create a task first
+    auth_client.post(f"/projects/{project['id']}/tasks", json={"title": "Task"})
+    # Soft delete project
+    auth_client.delete(f"/projects/{project['id']}")
+    # Task endpoints should 404
+    assert auth_client.get(f"/projects/{project['id']}/tasks").status_code == 404
+    assert auth_client.post(
+        f"/projects/{project['id']}/tasks", json={"title": "New"}
+    ).status_code == 404
+
+
+def test_restore_brings_back_tasks(auth_client, project):
+    """Tasks survive the soft-delete/restore cycle and are accessible after restore."""
+    task = auth_client.post(
+        f"/projects/{project['id']}/tasks", json={"title": "Task"}
+    ).json()
+    auth_client.delete(f"/projects/{project['id']}")
+    auth_client.post(f"/projects/{project['id']}/restore")
+    response = auth_client.get(f"/projects/{project['id']}/tasks")
+    assert response.status_code == 200
+    assert any(t["id"] == task["id"] for t in response.json())
