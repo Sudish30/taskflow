@@ -65,7 +65,7 @@ def test_get_project(auth_client, project):
 def test_get_project_not_found(auth_client):
     response = auth_client.get("/projects/9999")
     assert response.status_code == 404
-    assert response.json() == {"error": "Project not found"}
+    assert response.json() == {"error": {"code": "not_found", "message": "Project not found"}}
 
 
 def test_get_other_users_project_hidden(auth_client, project):
@@ -97,7 +97,7 @@ def test_update_project_description_only(auth_client, project):
 def test_update_project_not_found(auth_client):
     response = auth_client.put("/projects/9999", json={"name": "Nope"})
     assert response.status_code == 404
-    assert response.json() == {"error": "Project not found"}
+    assert response.json() == {"error": {"code": "not_found", "message": "Project not found"}}
 
 
 def test_delete_project(auth_client, project):
@@ -110,3 +110,23 @@ def test_delete_project(auth_client, project):
 def test_delete_project_not_found(auth_client):
     response = auth_client.delete("/projects/9999")
     assert response.status_code == 404
+    assert response.json()["error"]["code"] == "not_found"
+
+
+def test_error_envelope_shape_on_not_found(auth_client):
+    """Verify the standard error envelope is present on 404 errors."""
+    response = auth_client.get("/projects/9999")
+    assert response.status_code == 404
+    body = response.json()
+    assert "error" in body
+    assert body["error"]["code"] == "not_found"
+    assert body["error"]["message"] == "Project not found"
+
+
+def test_error_envelope_shape_on_validation_error(auth_client):
+    """Verify the standard error envelope is present on validation errors."""
+    response = auth_client.post("/projects", json={"name": ""})
+    assert response.status_code == 422
+    body = response.json()
+    assert "error" in body
+    assert body["error"]["code"] == "validation_error"
