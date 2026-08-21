@@ -110,3 +110,69 @@ def test_delete_project(auth_client, project):
 def test_delete_project_not_found(auth_client):
     response = auth_client.delete("/projects/9999")
     assert response.status_code == 404
+
+
+# --- Archive feature tests ---
+
+
+def test_create_project_has_is_archived_field(auth_client):
+    response = auth_client.post("/projects", json={"name": "Test"})
+    assert response.status_code == 201
+    assert response.json()["is_archived"] is False
+
+
+def test_archive_project_hides_from_default_list(auth_client, project):
+    response = auth_client.patch(
+        f"/projects/{project['id']}/archive", json={"is_archived": True}
+    )
+    assert response.status_code == 200
+    assert response.json()["is_archived"] is True
+
+    list_response = auth_client.get("/projects")
+    ids = [p["id"] for p in list_response.json()]
+    assert project["id"] not in ids
+
+
+def test_archived_projects_appear_in_archived_list(auth_client, project):
+    auth_client.patch(
+        f"/projects/{project['id']}/archive", json={"is_archived": True}
+    )
+    response = auth_client.get("/projects?archived=true")
+    assert response.status_code == 200
+    ids = [p["id"] for p in response.json()]
+    assert project["id"] in ids
+
+
+def test_default_list_excludes_archived(auth_client):
+    r1 = auth_client.post("/projects", json={"name": "Active"}).json()
+    r2 = auth_client.post("/projects", json={"name": "Old Finished"}).json()
+    auth_client.patch(f"/projects/{r2['id']}/archive", json={"is_archived": True})
+
+    response = auth_client.get("/projects")
+    ids = [p["id"] for p in response.json()]
+    assert r1["id"] in ids
+    assert r2["id"] not in ids
+
+
+def test_unarchive_project_restores_to_default_list(auth_client, project):
+    auth_client.patch(
+        f"/projects/{project['id']}/archive", json={"is_archived": True}
+    )
+    auth_client.patch(
+        f"/projects/{project['id']}/archive", json={"is_archived": False}
+    )
+    response = auth_client.get("/projects")
+    ids = [p["id"] for p in response.json()]
+    assert project["id"] in ids
+
+
+def test_archive_project_not_found(auth_client):
+    response = auth_client.patch("/projects/9999/archive", json={"is_archived": True})
+    assert response.status_code == 404
+    assert response.json() == {"error": "Project not found"}
+
+
+def test_archived_list_excludes_active_projects(auth_client, project):
+    response = auth_client.get("/projects?archived=true")
+    ids = [p["id"] for p in response.json()]
+    assert project["id"] not in ids
