@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
@@ -43,6 +44,7 @@ def update_project(db: Session, project: Project, data: ProjectUpdate) -> Projec
     updates = data.model_dump(exclude_unset=True)
     for field, value in updates.items():
         setattr(project, field, value)
+    project.updated_at = datetime.utcnow()  # explicitly refresh timestamp
     db.commit()
     db.refresh(project)
     return project
