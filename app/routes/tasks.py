@@ -5,7 +5,7 @@ from app.database import get_db
 from app.models.project import Project
 from app.models.user import User
 from app.routes.auth import get_current_user
-from app.schemas.task import TaskCreate, TaskResponse, TaskUpdate
+from app.schemas.task import TaskCreate, TaskListResponse, TaskResponse, TaskUpdate
 from app.services import project_service, task_service
 
 router = APIRouter(prefix="/projects/{project_id}/tasks", tags=["tasks"])
@@ -31,7 +31,7 @@ def create_task(
     return task_service.create_task(db, project_id, data)
 
 
-@router.get("", response_model=list[TaskResponse])
+@router.get("", response_model=TaskListResponse)
 def list_tasks(
     project_id: int,
     limit: int = Query(default=20, ge=1),
