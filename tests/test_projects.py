@@ -110,3 +110,27 @@ def test_delete_project(auth_client, project):
 def test_delete_project_not_found(auth_client):
     response = auth_client.delete("/projects/9999")
     assert response.status_code == 404
+
+
+def test_delete_project_also_deletes_its_tasks(auth_client, project):
+    """Deleting a project must cascade-delete all of its tasks."""
+    # Create two tasks under the project
+    task1 = auth_client.post(
+        f"/projects/{project['id']}/tasks",
+        json={"title": "Task One"},
+    ).json()
+    task2 = auth_client.post(
+        f"/projects/{project['id']}/tasks",
+        json={"title": "Task Two"},
+    ).json()
+
+    # Delete the project
+    response = auth_client.delete(f"/projects/{project['id']}")
+    assert response.status_code == 204
+
+    # Tasks should no longer be accessible
+    r1 = auth_client.get(f"/projects/{project['id']}/tasks/{task1['id']}")
+    assert r1.status_code == 404
+
+    r2 = auth_client.get(f"/projects/{project['id']}/tasks/{task2['id']}")
+    assert r2.status_code == 404
