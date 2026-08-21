@@ -22,3 +22,4 @@ class ProjectResponse(BaseModel):
     description: Optional[str]
     owner_id: int
     created_at: datetime
+    updated_at: datetime
