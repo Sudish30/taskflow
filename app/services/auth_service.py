@@ -24,7 +24,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def get_user_by_email(db: Session, email: str) -> Optional[User]:
     """Look up a user by email, or None if not found."""
-    return db.query(User).filter(User.email == email).first()
+    return db.query(User).filter(User.email == email.strip().lower()).first()
 
 
 def get_user_by_id(db: Session, user_id: int) -> Optional[User]:
