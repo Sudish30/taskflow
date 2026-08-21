@@ -46,3 +46,12 @@ class TaskResponse(BaseModel):
     due_date: Optional[datetime]
     project_id: int
     created_at: datetime
+
+
+class TaskListResponse(BaseModel):
+    """Envelope response for paginated task lists."""
+
+    items: list[TaskResponse]
+    total: int
+    limit: int
+    offset: int
