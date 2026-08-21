@@ -16,6 +16,7 @@ def test_create_project(auth_client):
     assert body["description"] == "Marketing site"
     assert "id" in body
     assert "created_at" in body
+    assert "updated_at" in body
 
 
 def test_create_project_requires_auth(client):
@@ -82,6 +83,8 @@ def test_update_project_name(auth_client, project):
     body = response.json()
     assert body["name"] == "Renamed"
     assert body["description"] == "Default project"
+    assert "updated_at" in body
+    assert body["updated_at"] >= project["created_at"]
 
 
 def test_update_project_description_only(auth_client, project):
@@ -110,3 +113,22 @@ def test_delete_project(auth_client, project):
 def test_delete_project_not_found(auth_client):
     response = auth_client.delete("/projects/9999")
     assert response.status_code == 404
+
+
+def test_create_project_has_updated_at(auth_client):
+    response = auth_client.post(
+        "/projects", json={"name": "Website", "description": "Marketing site"}
+    )
+    assert response.status_code == 201
+    body = response.json()
+    assert "updated_at" in body
+
+
+def test_updated_at_changes_on_update(auth_client, project):
+    original_updated_at = project["updated_at"]
+    response = auth_client.put(
+        f"/projects/{project['id']}", json={"name": "Renamed"}
+    )
+    assert response.status_code == 200
+    new_updated_at = response.json()["updated_at"]
+    assert new_updated_at >= original_updated_at
