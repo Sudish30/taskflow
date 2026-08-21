@@ -16,6 +16,7 @@ def test_create_task_defaults(auth_client, project):
     assert body["priority"] == 3
     assert body["due_date"] is None
     assert body["project_id"] == project["id"]
+    assert body["completed_at"] is None
 
 
 def test_create_task_with_all_fields(auth_client, project):
@@ -33,6 +34,7 @@ def test_create_task_with_all_fields(auth_client, project):
     assert body["status"] == "in_progress"
     assert body["priority"] == 1
     assert body["due_date"] == "2026-12-31T17:00:00"
+    assert body["completed_at"] is None
 
 
 def test_create_task_invalid_priority(auth_client, project):
@@ -145,6 +147,7 @@ def test_update_task_status(auth_client, project):
     body = response.json()
     assert body["status"] == "done"
     assert body["title"] == "Write the report"
+    assert body["completed_at"] is not None
 
 
 def test_update_task_title_and_priority(auth_client, project):
@@ -190,3 +193,95 @@ def test_delete_task(auth_client, project):
 def test_delete_task_not_found(auth_client, project):
     response = auth_client.delete(f"/projects/{project['id']}/tasks/9999")
     assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# New tests for completed_at behaviour
+# ---------------------------------------------------------------------------
+
+def test_completed_at_set_when_status_changes_to_done(auth_client, project):
+    """completed_at is populated when a task is moved to done."""
+    created = create_task(auth_client, project["id"]).json()
+    assert created["completed_at"] is None
+
+    response = auth_client.put(
+        f"/projects/{project['id']}/tasks/{created['id']}",
+        json={"status": "done"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "done"
+    assert body["completed_at"] is not None
+
+
+def test_completed_at_cleared_when_moved_back_to_todo(auth_client, project):
+    """completed_at is cleared when a task is moved back to todo."""
+    created = create_task(auth_client, project["id"]).json()
+
+    # Move to done
+    auth_client.put(
+        f"/projects/{project['id']}/tasks/{created['id']}",
+        json={"status": "done"},
+    )
+
+    # Move back to todo
+    response = auth_client.put(
+        f"/projects/{project['id']}/tasks/{created['id']}",
+        json={"status": "todo"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "todo"
+    assert body["completed_at"] is None
+
+
+def test_completed_at_cleared_when_moved_to_in_progress(auth_client, project):
+    """completed_at is cleared when a task is moved back to in_progress."""
+    created = create_task(auth_client, project["id"]).json()
+
+    # Move to done
+    auth_client.put(
+        f"/projects/{project['id']}/tasks/{created['id']}",
+        json={"status": "done"},
+    )
+
+    # Move back to in_progress
+    response = auth_client.put(
+        f"/projects/{project['id']}/tasks/{created['id']}",
+        json={"status": "in_progress"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "in_progress"
+    assert body["completed_at"] is None
+
+
+def test_completed_at_set_when_created_with_done_status(auth_client, project):
+    """completed_at is set immediately if task is created with status=done."""
+    response = create_task(auth_client, project["id"], status="done")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["status"] == "done"
+    assert body["completed_at"] is not None
+
+
+def test_completed_at_not_changed_when_updating_other_fields(auth_client, project):
+    """completed_at is not affected by updates that don't touch status."""
+    created = create_task(auth_client, project["id"]).json()
+
+    # Mark done first
+    done_response = auth_client.put(
+        f"/projects/{project['id']}/tasks/{created['id']}",
+        json={"status": "done"},
+    )
+    completed_at = done_response.json()["completed_at"]
+    assert completed_at is not None
+
+    # Update title only — completed_at should stay the same
+    response = auth_client.put(
+        f"/projects/{project['id']}/tasks/{created['id']}",
+        json={"title": "New title"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["completed_at"] == completed_at
