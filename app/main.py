@@ -1,11 +1,13 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.database import Base, engine
+from app.database import Base, engine, get_db
 from app.routes import auth, projects, tasks
 
 
@@ -30,8 +32,20 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/health")
-    def health():
-        return {"status": "ok"}
+    def health(db: Session = Depends(get_db)):
+        """Check service health including database connectivity.
+
+        Returns 200 with database: ok when the DB is reachable,
+        or 503 with database: error when the DB query fails.
+        """
+        try:
+            db.execute(text("SELECT 1"))
+            return {"status": "ok", "database": "ok"}
+        except Exception:
+            return JSONResponse(
+                status_code=503,
+                content={"status": "degraded", "database": "error"},
+            )
 
     return app
 
