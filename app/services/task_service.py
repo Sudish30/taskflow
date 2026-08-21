@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskUpdate
-from app.utils.pagination import paginate
+from app.utils.pagination import paginate, DEFAULT_LIMIT, MAX_LIMIT
 
 
 def create_task(db: Session, project_id: int, data: TaskCreate) -> Task:
@@ -24,14 +24,35 @@ def create_task(db: Session, project_id: int, data: TaskCreate) -> Task:
 
 
 def get_tasks_for_project(
-    db: Session, project_id: int, limit: int = None, offset: int = None
+    db: Session,
+    project_id: int,
+    limit: int = None,
+    offset: int = None,
+    cursor: int = None,
 ) -> List[Task]:
-    """List a project's tasks in creation order, with limit/offset paging."""
+    """List a project's tasks in creation order, with limit/offset or cursor paging.
+
+    When ``cursor`` is provided (an id returned from the previous page), keyset
+    pagination is used: only rows with id > cursor are considered, making deep
+    pages as fast as the first page.  When ``cursor`` is None the legacy
+    limit/offset path is used so existing callers are unaffected.
+
+    Note: when ``cursor`` is provided, ``offset`` is ignored — mixing the two
+    is nonsensical and cursor takes precedence.
+    """
     query = (
         db.query(Task)
         .filter(Task.project_id == project_id)
         .order_by(Task.id)
     )
+    if cursor is not None:
+        query = query.filter(Task.id > cursor)
+        # cursor path: no offset needed, just apply limit
+        if limit is None or limit < 1:
+            limit = DEFAULT_LIMIT
+        if limit > MAX_LIMIT:
+            limit = MAX_LIMIT
+        return query.limit(limit).all()
     return paginate(query, limit=limit, offset=offset)
 
 
