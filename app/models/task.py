@@ -24,5 +24,6 @@ class Task(Base):
     due_date = Column(DateTime, nullable=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    completed_at = Column(DateTime, nullable=True, default=None)
 
     project = relationship("Project", back_populates="tasks")
