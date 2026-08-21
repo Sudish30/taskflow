@@ -29,7 +29,9 @@ def test_register_duplicate_email(client):
     assert first.status_code == 201
     second = client.post("/auth/register", json=payload)
     assert second.status_code == 400
-    assert second.json()["detail"] == "Email already registered"
+    body = second.json()
+    assert body["error"]["code"] == "bad_request"
+    assert body["error"]["message"] == "Email already registered"
 
 
 def test_register_invalid_email(client):
@@ -82,7 +84,9 @@ def test_login_wrong_password(client):
         json={"email": USER_EMAIL, "password": "wrongpassword"},
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Invalid email or password"
+    body = response.json()
+    assert body["error"]["code"] == "unauthorized"
+    assert body["error"]["message"] == "Invalid email or password"
 
 
 def test_login_unknown_email(client):
@@ -109,7 +113,9 @@ def test_me_with_invalid_token(client):
         "/auth/me", headers={"Authorization": "Bearer not-a-real-token"}
     )
     assert response.status_code == 401
-    assert response.json()["detail"] == "Could not validate credentials"
+    body = response.json()
+    assert body["error"]["code"] == "unauthorized"
+    assert body["error"]["message"] == "Could not validate credentials"
 
 
 def test_token_from_login_works_on_protected_route(client):
@@ -119,3 +125,15 @@ def test_token_from_login_works_on_protected_route(client):
     )
     assert response.status_code == 200
     assert response.json()["email"] == "bob@example.com"
+
+
+def test_register_invalid_email_uses_error_envelope(client):
+    response = client.post(
+        "/auth/register",
+        json={"email": "not-an-email", "password": "password123"},
+    )
+    assert response.status_code == 422
+    body = response.json()
+    assert "error" in body
+    assert body["error"]["code"] == "validation_error"
+    assert isinstance(body["error"]["message"], str)
