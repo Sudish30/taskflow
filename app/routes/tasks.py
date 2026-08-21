@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -34,13 +36,24 @@ def create_task(
 @router.get("", response_model=list[TaskResponse])
 def list_tasks(
     project_id: int,
+    response: Response,
     limit: int = Query(default=20, ge=1),
     offset: int = Query(default=0, ge=0),
+    cursor: Optional[int] = Query(
+        default=None,
+        ge=1,
+        description="Last task id from previous page (keyset pagination)",
+    ),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     get_owned_project(project_id, db, current_user)
-    return task_service.get_tasks_for_project(db, project_id, limit=limit, offset=offset)
+    tasks = task_service.get_tasks_for_project(
+        db, project_id, limit=limit, offset=offset, cursor=cursor
+    )
+    if tasks:
+        response.headers["X-Next-Cursor"] = str(tasks[-1].id)
+    return tasks
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
