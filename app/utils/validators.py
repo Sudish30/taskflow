@@ -22,6 +22,14 @@ def validate_password_strength(value: str) -> str:
     return value
 
 
+def validate_not_blank(value: str, field_name: str = "field") -> str:
+    """Strip whitespace and reject blank strings."""
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError(f"{field_name} must not be blank or whitespace-only")
+    return stripped
+
+
 def validate_priority(value: int) -> int:
     if value < MIN_PRIORITY or value > MAX_PRIORITY:
         raise ValueError(
