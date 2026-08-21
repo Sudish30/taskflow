@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.routes.auth import get_current_user
-from app.schemas.project import ProjectCreate, ProjectResponse, ProjectUpdate
+from app.schemas.project import ProjectArchive, ProjectCreate, ProjectResponse, ProjectUpdate
 from app.services import project_service
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -22,10 +22,14 @@ def create_project(
 
 @router.get("", response_model=list[ProjectResponse])
 def list_projects(
+    archived: bool = False,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return project_service.get_projects_for_user(db, current_user.id)
+    """List projects. Use ?archived=true to view archived projects."""
+    return project_service.get_projects_for_user(
+        db, current_user.id, include_archived=archived
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -57,6 +61,23 @@ def update_project(
             content={"error": "Project not found"},
         )
     return project_service.update_project(db, project, data)
+
+
+@router.patch("/{project_id}/archive", response_model=ProjectResponse)
+def archive_project(
+    project_id: int,
+    data: ProjectArchive,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Archive or unarchive a project. Body: {"is_archived": true/false}"""
+    project = project_service.get_project(db, current_user.id, project_id)
+    if project is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Project not found"},
+        )
+    return project_service.archive_project(db, project, data.is_archived)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
