@@ -6,9 +6,18 @@ from sqlalchemy.pool import StaticPool
 
 from app.database import Base, get_db
 from app.main import app
+from app.utils.limiter_instance import login_rate_limiter
 
 USER_EMAIL = "alice@example.com"
 USER_PASSWORD = "supersecret1"
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter():
+    """Clear rate limiter state before and after each test for isolation."""
+    login_rate_limiter.reset()
+    yield
+    login_rate_limiter.reset()
 
 
 @pytest.fixture()
