@@ -1,10 +1,17 @@
 from typing import List, Optional
 
+from sqlalchemy import asc, desc
 from sqlalchemy.orm import Session
 
 from app.models.task import Task
 from app.schemas.task import TaskCreate, TaskUpdate
 from app.utils.pagination import paginate
+
+SORT_COLUMN_MAP = {
+    "created_at": Task.created_at,
+    "due_date": Task.due_date,
+    "priority": Task.priority,
+}
 
 
 def create_task(db: Session, project_id: int, data: TaskCreate) -> Task:
@@ -24,13 +31,20 @@ def create_task(db: Session, project_id: int, data: TaskCreate) -> Task:
 
 
 def get_tasks_for_project(
-    db: Session, project_id: int, limit: int = None, offset: int = None
+    db: Session,
+    project_id: int,
+    limit: int = None,
+    offset: int = None,
+    sort_by: str = "created_at",
+    order: str = "asc",
 ) -> List[Task]:
-    """List a project's tasks in creation order, with limit/offset paging."""
+    """List a project's tasks with sorting and limit/offset paging."""
+    sort_column = SORT_COLUMN_MAP[sort_by]
+    order_func = asc if order == "asc" else desc
     query = (
         db.query(Task)
         .filter(Task.project_id == project_id)
-        .order_by(Task.id)
+        .order_by(order_func(sort_column))
     )
     return paginate(query, limit=limit, offset=offset)
 
