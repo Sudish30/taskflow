@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     secret_key: str = "dev-secret-key-change-in-production"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
+    request_log_enabled: bool = True
 
     model_config = SettingsConfigDict(
         env_prefix="TASKFLOW_",
