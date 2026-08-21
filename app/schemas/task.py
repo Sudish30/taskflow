@@ -4,7 +4,7 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.task import TaskStatus
-from app.utils.validators import validate_priority
+from app.utils.validators import validate_not_blank, validate_priority
 
 
 class TaskCreate(BaseModel):
@@ -13,6 +13,11 @@ class TaskCreate(BaseModel):
     status: TaskStatus = TaskStatus.todo
     priority: int = 3
     due_date: Optional[datetime] = None
+
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, value: str) -> str:
+        return validate_not_blank(value, "Task title")
 
     @field_validator("priority")
     @classmethod
@@ -26,6 +31,13 @@ class TaskUpdate(BaseModel):
     status: Optional[TaskStatus] = None
     priority: Optional[int] = None
     due_date: Optional[datetime] = None
+
+    @field_validator("title")
+    @classmethod
+    def title_not_blank(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return value
+        return validate_not_blank(value, "Task title")
 
     @field_validator("priority")
     @classmethod
