@@ -190,3 +190,97 @@ def test_delete_task(auth_client, project):
 def test_delete_task_not_found(auth_client, project):
     response = auth_client.delete(f"/projects/{project['id']}/tasks/9999")
     assert response.status_code == 404
+
+
+# --- Sorting tests ---
+
+def test_list_tasks_default_sort_is_created_at_asc(auth_client, project):
+    create_task(auth_client, project["id"], title="First")
+    create_task(auth_client, project["id"], title="Second")
+    response = auth_client.get(f"/projects/{project['id']}/tasks")
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert titles == ["First", "Second"]
+
+
+def test_list_tasks_sort_created_at_desc(auth_client, project):
+    create_task(auth_client, project["id"], title="First")
+    create_task(auth_client, project["id"], title="Second")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=created_at&order=desc"
+    )
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert titles == ["Second", "First"]
+
+
+def test_list_tasks_sort_by_priority_asc(auth_client, project):
+    create_task(auth_client, project["id"], title="Low", priority=5)
+    create_task(auth_client, project["id"], title="High", priority=1)
+    create_task(auth_client, project["id"], title="Mid", priority=3)
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=priority&order=asc"
+    )
+    assert response.status_code == 200
+    priorities = [t["priority"] for t in response.json()]
+    assert priorities == [1, 3, 5]
+
+
+def test_list_tasks_sort_by_priority_desc(auth_client, project):
+    create_task(auth_client, project["id"], title="Low", priority=5)
+    create_task(auth_client, project["id"], title="High", priority=1)
+    create_task(auth_client, project["id"], title="Mid", priority=3)
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=priority&order=desc"
+    )
+    assert response.status_code == 200
+    priorities = [t["priority"] for t in response.json()]
+    assert priorities == [5, 3, 1]
+
+
+def test_list_tasks_sort_by_due_date_asc(auth_client, project):
+    create_task(auth_client, project["id"], title="Later", due_date="2026-12-01T00:00:00")
+    create_task(auth_client, project["id"], title="Sooner", due_date="2026-01-01T00:00:00")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=due_date&order=asc"
+    )
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert titles == ["Sooner", "Later"]
+
+
+def test_list_tasks_sort_by_due_date_desc(auth_client, project):
+    create_task(auth_client, project["id"], title="Later", due_date="2026-12-01T00:00:00")
+    create_task(auth_client, project["id"], title="Sooner", due_date="2026-01-01T00:00:00")
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=due_date&order=desc"
+    )
+    assert response.status_code == 200
+    titles = [t["title"] for t in response.json()]
+    assert titles == ["Later", "Sooner"]
+
+
+def test_list_tasks_invalid_sort_by_returns_422(auth_client, project):
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=title"
+    )
+    assert response.status_code == 422
+
+
+def test_list_tasks_invalid_order_returns_422(auth_client, project):
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?order=random"
+    )
+    assert response.status_code == 422
+
+
+def test_list_tasks_sort_composes_with_pagination(auth_client, project):
+    for p in [5, 3, 1, 4, 2]:
+        create_task(auth_client, project["id"], title=f"Task p{p}", priority=p)
+    # Sort by priority asc, take second page (offset=2, limit=2) -> priorities 3, 4
+    response = auth_client.get(
+        f"/projects/{project['id']}/tasks?sort_by=priority&order=asc&limit=2&offset=2"
+    )
+    assert response.status_code == 200
+    priorities = [t["priority"] for t in response.json()]
+    assert priorities == [3, 4]

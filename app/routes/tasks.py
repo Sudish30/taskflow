@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
@@ -36,11 +38,15 @@ def list_tasks(
     project_id: int,
     limit: int = Query(default=20, ge=1),
     offset: int = Query(default=0, ge=0),
+    sort_by: Literal["created_at", "due_date", "priority"] = Query(default="created_at"),
+    order: Literal["asc", "desc"] = Query(default="asc"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     get_owned_project(project_id, db, current_user)
-    return task_service.get_tasks_for_project(db, project_id, limit=limit, offset=offset)
+    return task_service.get_tasks_for_project(
+        db, project_id, limit=limit, offset=offset, sort_by=sort_by, order=order
+    )
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
