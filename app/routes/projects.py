@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,6 +16,7 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Create a new project for the authenticated user."""
     return project_service.create_project(db, current_user.id, data)
 
 
@@ -25,6 +25,7 @@ def list_projects(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """List all projects belonging to the authenticated user."""
     return project_service.get_projects_for_user(db, current_user.id)
 
 
@@ -34,11 +35,12 @@ def get_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Fetch a single project by ID (scoped to the authenticated user)."""
     project = project_service.get_project(db, current_user.id, project_id)
     if project is None:
-        return JSONResponse(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            content={"error": "Project not found"},
+            detail="Project not found",
         )
     return project
 
@@ -50,11 +52,12 @@ def update_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Update fields on an existing project (scoped to the authenticated user)."""
     project = project_service.get_project(db, current_user.id, project_id)
     if project is None:
-        return JSONResponse(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            content={"error": "Project not found"},
+            detail="Project not found",
         )
     return project_service.update_project(db, project, data)
 
@@ -65,10 +68,11 @@ def delete_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    """Delete a project (scoped to the authenticated user)."""
     project = project_service.get_project(db, current_user.id, project_id)
     if project is None:
-        return JSONResponse(
+        raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            content={"error": "Project not found"},
+            detail="Project not found",
         )
     project_service.delete_project(db, project)
