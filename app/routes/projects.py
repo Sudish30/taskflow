@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
@@ -22,10 +22,13 @@ def create_project(
 
 @router.get("", response_model=list[ProjectResponse])
 def list_projects(
+    archived: bool = Query(False, description="If true, return archived projects only"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return project_service.get_projects_for_user(db, current_user.id)
+    return project_service.get_projects_for_user(
+        db, current_user.id, include_archived=archived
+    )
 
 
 @router.get("/{project_id}", response_model=ProjectResponse)
@@ -57,6 +60,36 @@ def update_project(
             content={"error": "Project not found"},
         )
     return project_service.update_project(db, project, data)
+
+
+@router.post("/{project_id}/archive", response_model=ProjectResponse)
+def archive_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = project_service.get_project(db, current_user.id, project_id)
+    if project is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Project not found"},
+        )
+    return project_service.archive_project(db, project)
+
+
+@router.post("/{project_id}/unarchive", response_model=ProjectResponse)
+def unarchive_project(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = project_service.get_project(db, current_user.id, project_id)
+    if project is None:
+        return JSONResponse(
+            status_code=status.HTTP_404_NOT_FOUND,
+            content={"error": "Project not found"},
+        )
+    return project_service.unarchive_project(db, project)
 
 
 @router.delete("/{project_id}", status_code=status.HTTP_204_NO_CONTENT)
